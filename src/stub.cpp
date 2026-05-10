@@ -3,15 +3,25 @@
 
 #include "freqlab_licensing.h"
 
+#include <cstdlib>
+
 namespace freqlab {
 namespace licensing {
 
-LicenseInfo current() {
-    return LicenseInfo{};
+Status currentStatus() {
+    // FREQLAB_LICENSING_DEV=1 returns NotActivated so sellers can exercise
+    // their activate / status UI locally. Default is NoConfig (signal:
+    // licensing not wired up in this build).
+    if (std::getenv("FREQLAB_LICENSING_DEV") != nullptr) {
+        return Status::NotActivated;
+    }
+    return Status::NoConfig;
 }
 
-Status currentStatus() {
-    return Status::NotActivated;
+LicenseInfo current() {
+    LicenseInfo info{};
+    info.status = currentStatus();
+    return info;
 }
 
 void validateAndActivate(

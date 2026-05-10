@@ -1,9 +1,21 @@
 //! # freqlab-licensing
 //!
 //! Local development surface for the freqlab plugin licensing system.
-//! Every fallible call returns [`Error::StubBuild`]; [`current_status`]
-//! returns [`Status::NotActivated`]. Submit your plugin through the
-//! freqlab cloud with licensing enabled to get the real implementation.
+//! [`current_status`] returns [`Status::NoConfig`] (signal: this build
+//! has no licensing wired up). Every fallible call returns
+//! [`Error::StubBuild`]. Submit your plugin through the freqlab cloud
+//! with licensing enabled to get the real implementation.
+//!
+//! Sellers should hide their licensing UI when `current_status()` returns
+//! [`Status::NoConfig`]; that way local builds and unlicensed cloud builds
+//! both show no licensing surface, while licensed cloud builds show the
+//! activate flow.
+//!
+//! ## Developing your licensing UI locally
+//!
+//! Set `FREQLAB_LICENSING_DEV=1` in the environment to make the stub
+//! return [`Status::NotActivated`] instead. Lets you exercise your
+//! activate / status UI without going through the cloud.
 //!
 //! See <https://github.com/Nanoshrine-Interactive/freqlab-licensing>.
 
@@ -12,8 +24,8 @@
 
 use std::time::SystemTime;
 
-/// Top-level state of the buyer's license. Always [`Status::NotActivated`]
-/// in local builds.
+/// Top-level state of the buyer's license. Defaults to [`Status::NoConfig`]
+/// in local builds (override with `FREQLAB_LICENSING_DEV=1`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// Valid, in good standing.
@@ -35,7 +47,7 @@ pub enum Status {
 
 impl Default for Status {
     fn default() -> Self {
-        Status::NotActivated
+        Status::NoConfig
     }
 }
 
@@ -119,12 +131,23 @@ impl std::error::Error for Error {}
 
 /// Return the cached license state.
 pub fn current() -> LicenseInfo {
-    LicenseInfo::default()
+    LicenseInfo {
+        status: current_status(),
+        ..LicenseInfo::default()
+    }
 }
 
 /// Lock-free, alloc-free read of the [`Status`] enum. Audio-thread safe.
+///
+/// Returns [`Status::NoConfig`] by default. Set `FREQLAB_LICENSING_DEV=1`
+/// to return [`Status::NotActivated`] instead (useful when developing
+/// your activate / status UI locally).
 pub fn current_status() -> Status {
-    Status::NotActivated
+    if std::env::var_os("FREQLAB_LICENSING_DEV").is_some() {
+        Status::NotActivated
+    } else {
+        Status::NoConfig
+    }
 }
 
 /// Activate this machine for the supplied license key. Blocking in cloud
@@ -149,14 +172,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn current_status_is_not_activated() {
-        assert_eq!(current_status(), Status::NotActivated);
+    fn current_status_defaults_to_no_config() {
+        // Tests run in their own process; env var is unset by default.
+        std::env::remove_var("FREQLAB_LICENSING_DEV");
+        assert_eq!(current_status(), Status::NoConfig);
     }
 
     #[test]
-    fn current_returns_default() {
+    fn dev_env_var_flips_to_not_activated() {
+        std::env::set_var("FREQLAB_LICENSING_DEV", "1");
+        let s = current_status();
+        std::env::remove_var("FREQLAB_LICENSING_DEV");
+        assert_eq!(s, Status::NotActivated);
+    }
+
+    #[test]
+    fn current_returns_no_config() {
+        std::env::remove_var("FREQLAB_LICENSING_DEV");
         let info = current();
-        assert_eq!(info.status, Status::NotActivated);
+        assert_eq!(info.status, Status::NoConfig);
         assert!(info.license_key.is_none());
         assert!(info.features.is_empty());
         assert!(!info.check_in_required);

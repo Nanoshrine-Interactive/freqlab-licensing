@@ -14,7 +14,9 @@
 //   worker thread; marshal back to your UI thread before touching UI.
 //
 // Local-build behavior:
-//   currentStatus() returns Status::NotActivated.
+//   currentStatus() returns Status::NoConfig (signal: licensing not wired
+//   up in this build). Set FREQLAB_LICENSING_DEV=1 to return NotActivated
+//   instead, useful for local UI development.
 //   validateAndActivate(...) invokes onError synchronously.
 //   refreshAsync() is a no-op. deactivateThisMachine(done) calls done(false).
 
@@ -31,7 +33,8 @@
 namespace freqlab {
 namespace licensing {
 
-/// Top-level state of the buyer's license. Always NotActivated in local builds.
+/// Top-level state of the buyer's license. Defaults to NoConfig in local
+/// builds (override with FREQLAB_LICENSING_DEV=1).
 enum class Status {
     Licensed,       ///< Valid, in good standing.
     Trial,          ///< Trial active. Treat as licensed for plugin behavior.
@@ -44,7 +47,7 @@ enum class Status {
 
 /// Full snapshot returned by current().
 struct LicenseInfo {
-    Status status = Status::NotActivated;
+    Status status = Status::NoConfig;
     std::vector<std::string> features;
     std::optional<std::chrono::system_clock::time_point> expiry;
     std::optional<std::string> licenseKey;

@@ -3,23 +3,26 @@
 Local development surface for the [freqlab](https://freqlab.app) plugin licensing system. Seller plugin projects depend on this crate (Rust) or library (C++) so the licensing API resolves cleanly during ordinary local builds. When a plugin is submitted to the freqlab cloud build pipeline with licensing enabled, the build pipeline injects the real implementation at the same dependency name. Seller code is identical in both builds.
 
 ```
-local build  →  this stub          (Status::NotActivated, Err(StubBuild))
-cloud build  →  real implementation (full licensing functionality)
+local build               →  stub returns Status::NoConfig
+cloud build, no licensing →  stub returns Status::NoConfig
+cloud build, licensed     →  real implementation (NotActivated → Licensed flow)
 ```
+
+The `NoConfig` signal is your cue to hide the licensing UI entirely. In licensed cloud builds the SDK returns `NotActivated` (no `.lic` file yet) or `Licensed` (after activation), so your activate UI shows up in exactly the right place.
 
 ---
 
 ## Behavior in a local (stub) build
 
-| Call | Stub behavior |
-|---|---|
-| `current_status()` / `currentStatus()` | returns `Status::NotActivated` |
-| `current()` | returns default `LicenseInfo` (status = `NotActivated`) |
-| `validate_and_activate(key)` | returns `Err(Error::StubBuild)` (Rust) or invokes `onError("…inactive in local build…")` (C++) |
-| `deactivate_this_machine()` | returns `Err(Error::StubBuild)` (Rust) or `done(false)` (C++) |
-| `refresh()` / `refreshAsync()` | returns `Err(Error::StubBuild)` or no-op |
+| Call | Default | With `FREQLAB_LICENSING_DEV=1` |
+|---|---|---|
+| `current_status()` / `currentStatus()` | `Status::NoConfig` | `Status::NotActivated` |
+| `current()` | `LicenseInfo` with `status = NoConfig` | same with `status = NotActivated` |
+| `validate_and_activate(key)` | `Err(Error::StubBuild)` (Rust) / `onError(...)` (C++) | same |
+| `deactivate_this_machine()` | `Err(Error::StubBuild)` / `done(false)` | same |
+| `refresh()` / `refreshAsync()` | `Err(Error::StubBuild)` or no-op | same |
 
-You can wire up activate/status UI and exercise failure paths without a cloud round-trip.
+The `FREQLAB_LICENSING_DEV` env var lets you exercise your activate / status UI locally without going through the cloud. Set it in your run/debug configuration when you want to develop the licensing UI; leave it unset for normal plugin development (UI stays dormant).
 
 ---
 
@@ -90,6 +93,23 @@ void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override 
 ## Status display in your UI
 
 How your plugin behaves when the license is invalid is configured per-product in freqlab Distro (when you enable licensing on a product). The audio side is handled for you by the `// @freqlab:require-license` tag.
+
+### Hide your licensing UI when the build has no licensing wired up
+
+Local builds and cloud builds without licensing both return `Status::NoConfig`. Gate your indicator / activate modal on this:
+
+```rust
+let licensing_active = freqlab_licensing::current_status() != freqlab_licensing::Status::NoConfig;
+// show indicator + modal only when licensing_active
+```
+
+```cpp
+const bool licensingActive =
+    freqlab::licensing::currentStatus() != freqlab::licensing::Status::NoConfig;
+// show indicator + modal only when licensingActive
+```
+
+### Status banners
 
 You can optionally surface license status in your UI by polling `current_status()` from a UI timer. Useful for "license expired" banners, re-activation prompts, etc.
 

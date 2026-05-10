@@ -1,0 +1,39 @@
+// Local-build implementation of the freqlab licensing API. The cloud
+// build pipeline replaces this with the real implementation.
+
+#include "freqlab_licensing.h"
+
+namespace freqlab {
+namespace licensing {
+
+LicenseInfo current() {
+    return LicenseInfo{};
+}
+
+Status currentStatus() {
+    return Status::NotActivated;
+}
+
+void validateAndActivate(
+    const std::string& /*key*/,
+    std::function<void(LicenseInfo)> /*onSuccess*/,
+    std::function<void(std::string)> onError) {
+    // Synchronous in the stub; the cloud build uses a worker thread.
+    // Sellers should already be calling this from a non-UI thread.
+    if (onError) {
+        onError(
+            "freqlab licensing is inactive in this local build; "
+            "submit the plugin through the freqlab cloud with licensing "
+            "enabled to exercise the real activation flow");
+    }
+}
+
+void deactivateThisMachine(std::function<void(bool)> done) {
+    if (done) {
+        done(false);
+    }
+}
+
+void refreshAsync() {}
+
+}} // namespace freqlab::licensing

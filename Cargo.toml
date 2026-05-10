@@ -1,0 +1,17 @@
+[package]
+name = "freqlab-licensing"
+version = "0.1.0"
+edition = "2021"
+authors = ["freqlab <support@freqlab.app>"]
+license = "MIT OR Apache-2.0"
+description = "Local development surface for freqlab plugin licensing. The freqlab cloud build pipeline injects the real implementation when a plugin is built with licensing enabled."
+repository = "https://github.com/Nanoshrine-Interactive/freqlab-licensing"
+homepage = "https://freqlab.app"
+documentation = "https://docs.rs/freqlab-licensing"
+keywords = ["audio", "plugin", "vst", "licensing", "freqlab"]
+categories = ["multimedia::audio", "development-tools"]
+readme = "README.md"
+
+[lib]
+name = "freqlab_licensing"
+path = "src/lib.rs"

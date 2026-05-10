@@ -3,24 +3,59 @@
 
 #include "freqlab_licensing.h"
 
-#include <cstdlib>
+#include <chrono>
 
 namespace freqlab {
 namespace licensing {
 
 Status currentStatus() {
-    // FREQLAB_LICENSING_DEV=1 returns NotActivated so sellers can exercise
-    // their activate / status UI locally. Default is NoConfig (signal:
-    // licensing not wired up in this build).
-    if (std::getenv("FREQLAB_LICENSING_DEV") != nullptr) {
-        return Status::NotActivated;
-    }
+    // Build-time dev-mode flags set via CMake options of the same name.
+    // Precedence: LICENSED > EXPIRED > TAMPERED > GRACE > TRIAL >
+    // NOT_ACTIVATED > MODE (alias). Default is NoConfig (UI hidden).
+#if defined(FREQLAB_LICENSING_DEV_LICENSED)
+    return Status::Licensed;
+#elif defined(FREQLAB_LICENSING_DEV_EXPIRED)
+    return Status::Expired;
+#elif defined(FREQLAB_LICENSING_DEV_TAMPERED)
+    return Status::Tampered;
+#elif defined(FREQLAB_LICENSING_DEV_GRACE)
+    return Status::GracePeriod;
+#elif defined(FREQLAB_LICENSING_DEV_TRIAL)
+    return Status::Trial;
+#elif defined(FREQLAB_LICENSING_DEV_MODE) || defined(FREQLAB_LICENSING_DEV_NOT_ACTIVATED)
+    return Status::NotActivated;
+#else
     return Status::NoConfig;
+#endif
 }
 
 LicenseInfo current() {
     LicenseInfo info{};
     info.status = currentStatus();
+    // For statuses where a real cloud build would have a license attached,
+    // populate fake fields so the seller's UI can render them locally.
+    switch (info.status) {
+        case Status::Licensed:
+        case Status::Expired:
+        case Status::GracePeriod:
+        case Status::Trial:
+            info.licenseKey = std::string("DEV-MODE-XXXX-YYYY-ZZZZ");
+            info.licenseId = std::string("dev_license_00000000");
+            info.features = {std::string("DEV_FEATURE")};
+            break;
+        default:
+            break;
+    }
+    if (info.status == Status::Expired) {
+        // Year 2020.
+        info.expiry = std::chrono::system_clock::time_point{} +
+                      std::chrono::seconds(1577836800);
+    } else if (info.status == Status::Licensed ||
+               info.status == Status::GracePeriod ||
+               info.status == Status::Trial) {
+        info.expiry = std::chrono::system_clock::now() +
+                      std::chrono::hours(24 * 365);
+    }
     return info;
 }
 

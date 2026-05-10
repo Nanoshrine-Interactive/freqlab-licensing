@@ -15,8 +15,10 @@
 //
 // Local-build behavior:
 //   currentStatus() returns Status::NoConfig (signal: licensing not wired
-//   up in this build). Set FREQLAB_LICENSING_DEV=1 to return NotActivated
-//   instead, useful for local UI development.
+//   up in this build). Set one of the FREQLAB_LICENSING_DEV_* CMake
+//   options (LICENSED, EXPIRED, TAMPERED, GRACE, TRIAL, NOT_ACTIVATED)
+//   to bake a different status for local UI testing. current() returns
+//   matching realistic fake fields (key, expiry, features).
 //   validateAndActivate(...) invokes onError synchronously.
 //   refreshAsync() is a no-op. deactivateThisMachine(done) calls done(false).
 

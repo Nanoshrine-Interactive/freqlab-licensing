@@ -14,15 +14,47 @@ The `NoConfig` signal is your cue to hide the licensing UI entirely. In licensed
 
 ## Behavior in a local (stub) build
 
-| Call | Default | With `FREQLAB_LICENSING_DEV=1` |
-|---|---|---|
-| `current_status()` / `currentStatus()` | `Status::NoConfig` | `Status::NotActivated` |
-| `current()` | `LicenseInfo` with `status = NoConfig` | same with `status = NotActivated` |
-| `validate_and_activate(key)` | `Err(Error::StubBuild)` (Rust) / `onError(...)` (C++) | same |
-| `deactivate_this_machine()` | `Err(Error::StubBuild)` / `done(false)` | same |
-| `refresh()` / `refreshAsync()` | `Err(Error::StubBuild)` or no-op | same |
+In default builds, `current_status()` returns `Status::NoConfig` (signal: licensing not wired up). All fallible calls return `Err(Error::StubBuild)` (Rust) / invoke `onError("...")` (C++). `refreshAsync()` is a no-op.
 
-The `FREQLAB_LICENSING_DEV` env var lets you exercise your activate / status UI locally without going through the cloud. Set it in your run/debug configuration when you want to develop the licensing UI; leave it unset for normal plugin development (UI stays dormant).
+To test how your UI renders a specific status without doing a cloud build, enable a `dev-*` feature flag. Build-time, per-project, baked into the binary.
+
+### Status options (pick one)
+
+| State | Cargo feature | CMake option | What `current()` returns |
+|---|---|---|---|
+| `NotActivated` (fresh install) | `dev-not-activated` (alias: `dev-mode`) | `FREQLAB_LICENSING_DEV_NOT_ACTIVATED` | empty `LicenseInfo` with status |
+| `Licensed` | `dev-licensed` | `FREQLAB_LICENSING_DEV_LICENSED` | fake key + id + features + future expiry |
+| `Expired` | `dev-expired` | `FREQLAB_LICENSING_DEV_EXPIRED` | fake key + past expiry (2020) |
+| `Tampered` | `dev-tampered` | `FREQLAB_LICENSING_DEV_TAMPERED` | empty `LicenseInfo` with status |
+| `GracePeriod` | `dev-grace` | `FREQLAB_LICENSING_DEV_GRACE` | fake key + future expiry |
+| `Trial` | `dev-trial` | `FREQLAB_LICENSING_DEV_TRIAL` | fake key + future expiry |
+
+The fake `license_key` (`DEV-MODE-XXXX-YYYY-ZZZZ`), `license_id`, `expiry`, and `features` fields let your UI render every state with realistic data.
+
+### Toggling
+
+**Rust (Cargo):** edit your `Cargo.toml`, rebuild.
+```toml
+# default (licensing UI hidden):
+freqlab-licensing = { git = "...", branch = "main" }
+
+# pick one of:
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-not-activated"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-licensed"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-expired"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-tampered"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-grace"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-trial"] }
+```
+
+**C++ (CMake):** pass the option at configure time.
+```bash
+cmake -S . -B build                                     # default
+cmake -S . -B build -DFREQLAB_LICENSING_DEV_LICENSED=ON
+cmake -S . -B build -DFREQLAB_LICENSING_DEV_EXPIRED=ON
+cmake -S . -B build -DFREQLAB_LICENSING_DEV_TAMPERED=ON
+# etc.
+```
 
 ---
 

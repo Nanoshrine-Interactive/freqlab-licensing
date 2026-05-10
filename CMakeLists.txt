@@ -26,6 +26,35 @@ target_include_directories(freqlab_licensing PUBLIC
 
 target_compile_features(freqlab_licensing PUBLIC cxx_std_17)
 
+# Local UI dev-mode toggles. Set exactly one ON to bake a fake status
+# into the stub so the seller's licensing UI can render that state
+# locally without a cloud round-trip. Default (all OFF) keeps the UI
+# hidden, matching unlicensed cloud builds.
+#
+# If multiple are ON, precedence: LICENSED > EXPIRED > TAMPERED > GRACE
+# > TRIAL > NOT_ACTIVATED.
+option(FREQLAB_LICENSING_DEV_MODE          "Local dev: NotActivated (alias)" OFF)
+option(FREQLAB_LICENSING_DEV_NOT_ACTIVATED "Local dev: NotActivated"          OFF)
+option(FREQLAB_LICENSING_DEV_LICENSED      "Local dev: Licensed"              OFF)
+option(FREQLAB_LICENSING_DEV_EXPIRED       "Local dev: Expired"               OFF)
+option(FREQLAB_LICENSING_DEV_TAMPERED      "Local dev: Tampered"              OFF)
+option(FREQLAB_LICENSING_DEV_GRACE         "Local dev: GracePeriod"           OFF)
+option(FREQLAB_LICENSING_DEV_TRIAL         "Local dev: Trial"                 OFF)
+
+foreach(_flag IN ITEMS
+    FREQLAB_LICENSING_DEV_MODE
+    FREQLAB_LICENSING_DEV_NOT_ACTIVATED
+    FREQLAB_LICENSING_DEV_LICENSED
+    FREQLAB_LICENSING_DEV_EXPIRED
+    FREQLAB_LICENSING_DEV_TAMPERED
+    FREQLAB_LICENSING_DEV_GRACE
+    FREQLAB_LICENSING_DEV_TRIAL
+)
+    if(${_flag})
+        target_compile_definitions(freqlab_licensing PRIVATE ${_flag}=1)
+    endif()
+endforeach()
+
 # PIC required when statically linked into a plugin .dylib / .dll / .so.
 set_target_properties(freqlab_licensing PROPERTIES
     POSITION_INDEPENDENT_CODE ON

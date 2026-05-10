@@ -13,9 +13,24 @@
 //!
 //! ## Developing your licensing UI locally
 //!
-//! Set `FREQLAB_LICENSING_DEV=1` in the environment to make the stub
-//! return [`Status::NotActivated`] instead. Lets you exercise your
-//! activate / status UI without going through the cloud.
+//! Enable a `dev-*` Cargo feature on the dep in your plugin's
+//! `Cargo.toml` to bake a fake status into the stub:
+//!
+//! ```toml
+//! # any one of:
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-not-activated"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-licensed"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-expired"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-tampered"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-grace"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-trial"] }
+//! ```
+//!
+//! Rebuild. [`current_status`] now returns the matching variant and
+//! [`current`] returns a [`LicenseInfo`] with realistic fake fields
+//! (key, expiry, features), so you can test how your UI renders each
+//! state. Remove the `features = [...]` line and rebuild to flip back
+//! to default ([`Status::NoConfig`]).
 //!
 //! See <https://github.com/Nanoshrine-Interactive/freqlab-licensing>.
 
@@ -25,7 +40,8 @@
 use std::time::SystemTime;
 
 /// Top-level state of the buyer's license. Defaults to [`Status::NoConfig`]
-/// in local builds (override with `FREQLAB_LICENSING_DEV=1`).
+/// in local builds. Enable a `dev-*` Cargo feature to bake a different
+/// status for local UI testing (see crate-level docs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// Valid, in good standing.
@@ -129,21 +145,49 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Return the cached license state.
+/// Return the cached license state. In default builds the [`LicenseInfo`]
+/// is empty (status = [`Status::NoConfig`]). With a `dev-*` Cargo feature
+/// enabled, returns realistic fake fields matching the chosen status so
+/// your UI can render licensed / expired / etc. states without a cloud
+/// round-trip.
 pub fn current() -> LicenseInfo {
-    LicenseInfo {
-        status: current_status(),
+    let status = current_status();
+    let mut info = LicenseInfo {
+        status,
         ..LicenseInfo::default()
+    };
+    if matches!(
+        status,
+        Status::Licensed | Status::Expired | Status::GracePeriod | Status::Trial
+    ) {
+        info.license_key = Some("DEV-MODE-XXXX-YYYY-ZZZZ".to_owned());
+        info.license_id = Some("dev_license_00000000".to_owned());
+        info.features = vec!["DEV_FEATURE".to_owned()];
     }
+    if matches!(status, Status::Expired) {
+        // Year 2020.
+        info.expiry = Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_577_836_800));
+    } else if matches!(status, Status::Licensed | Status::GracePeriod | Status::Trial) {
+        info.expiry = Some(SystemTime::now() + std::time::Duration::from_secs(365 * 86400));
+    }
+    info
 }
 
 /// Lock-free, alloc-free read of the [`Status`] enum. Audio-thread safe.
-///
-/// Returns [`Status::NoConfig`] by default. Set `FREQLAB_LICENSING_DEV=1`
-/// to return [`Status::NotActivated`] instead (useful when developing
-/// your activate / status UI locally).
+/// Defaults to [`Status::NoConfig`]; enable a `dev-*` Cargo feature to
+/// override (see crate docs).
 pub fn current_status() -> Status {
-    if std::env::var_os("FREQLAB_LICENSING_DEV").is_some() {
+    if cfg!(feature = "dev-licensed") {
+        Status::Licensed
+    } else if cfg!(feature = "dev-expired") {
+        Status::Expired
+    } else if cfg!(feature = "dev-tampered") {
+        Status::Tampered
+    } else if cfg!(feature = "dev-grace") {
+        Status::GracePeriod
+    } else if cfg!(feature = "dev-trial") {
+        Status::Trial
+    } else if cfg!(any(feature = "dev-mode", feature = "dev-not-activated")) {
         Status::NotActivated
     } else {
         Status::NoConfig
@@ -172,29 +216,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn current_status_defaults_to_no_config() {
-        // Tests run in their own process; env var is unset by default.
-        std::env::remove_var("FREQLAB_LICENSING_DEV");
-        assert_eq!(current_status(), Status::NoConfig);
-    }
-
-    #[test]
-    fn dev_env_var_flips_to_not_activated() {
-        std::env::set_var("FREQLAB_LICENSING_DEV", "1");
+    fn current_status_default() {
+        // Default build (no dev-* feature) is NoConfig.
+        // Test runs against whatever feature set the test build picked up.
         let s = current_status();
-        std::env::remove_var("FREQLAB_LICENSING_DEV");
-        assert_eq!(s, Status::NotActivated);
+        if cfg!(feature = "dev-licensed") {
+            assert_eq!(s, Status::Licensed);
+        } else if cfg!(feature = "dev-expired") {
+            assert_eq!(s, Status::Expired);
+        } else if cfg!(feature = "dev-tampered") {
+            assert_eq!(s, Status::Tampered);
+        } else if cfg!(feature = "dev-grace") {
+            assert_eq!(s, Status::GracePeriod);
+        } else if cfg!(feature = "dev-trial") {
+            assert_eq!(s, Status::Trial);
+        } else if cfg!(any(feature = "dev-mode", feature = "dev-not-activated")) {
+            assert_eq!(s, Status::NotActivated);
+        } else {
+            assert_eq!(s, Status::NoConfig);
+        }
     }
 
     #[test]
-    fn current_returns_no_config() {
-        std::env::remove_var("FREQLAB_LICENSING_DEV");
+    fn current_matches_status() {
         let info = current();
-        assert_eq!(info.status, Status::NoConfig);
-        assert!(info.license_key.is_none());
-        assert!(info.features.is_empty());
-        assert!(!info.check_in_required);
-        assert!(!info.heartbeat_required);
+        assert_eq!(info.status, current_status());
+    }
+
+    #[test]
+    fn licensed_states_get_fake_fields() {
+        let info = current();
+        match info.status {
+            Status::Licensed | Status::Expired | Status::GracePeriod | Status::Trial => {
+                assert!(info.license_key.is_some(), "should have a fake key");
+                assert!(info.license_id.is_some(), "should have a fake id");
+                assert!(!info.features.is_empty(), "should have fake features");
+            }
+            _ => {
+                assert!(info.license_key.is_none());
+                assert!(info.license_id.is_none());
+                assert!(info.features.is_empty());
+            }
+        }
     }
 
     #[test]

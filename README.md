@@ -89,6 +89,24 @@ target_link_libraries(MyPlugin PRIVATE freqlab::licensing)
 
 ---
 
+## Initialize the cache at startup
+
+The SDK's in-memory cache starts at `Status::NoConfig`. Call `refresh()` (Rust) / `refreshAsync()` (C++) once when your plugin loads so subsequent `current_status()` reads reflect the on-disk license state. Without this step, your licensing UI will think the build has no licensing wired up and stay hidden.
+
+```rust
+// In your plugin's initialize() / setup hook (worker thread, refresh blocks):
+std::thread::spawn(|| { let _ = freqlab_licensing::refresh(); });
+```
+
+```cpp
+// In your plugin's prepareToPlay / initialize / setup hook:
+freqlab::licensing::refreshAsync();
+```
+
+In stub builds (with or without a `dev-*` feature) this is a no-op, so the same code is safe in both local and cloud builds.
+
+---
+
 ## Tags
 
 The cloud build pipeline runs a source-rewrite pass that transforms `// @freqlab:…` comment tags. Local builds ignore them (they are just comments).

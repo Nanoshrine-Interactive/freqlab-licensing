@@ -89,38 +89,53 @@ target_link_libraries(MyPlugin PRIVATE freqlab::licensing)
 
 ---
 
-### Windows: set the MSVC runtime library BEFORE `project()`
+### Toolchain settings must come BEFORE `project()`
 
 The freqlab cloud build pipeline injects the SDK via `-DCMAKE_PROJECT_INCLUDE=<sdk>/freqlab_inject.cmake`. This helper fires *during* `project()` and runs `add_subdirectory(<sdk>/cpp)` immediately — so the SDK's targets get configured as soon as your `project()` line executes.
 
-If you set `CMAKE_MSVC_RUNTIME_LIBRARY` to static (`/MT`) **after** `project()`, the SDK has already been compiled with the default (`/MD`) by then, and the link step fails with:
+Anything set *after* `project()` (CRT type, OSX archs, deployment target, etc.) won't apply to the SDK. Mismatches surface at link time:
+
+#### Windows: `/MD` vs `/MT` mismatch
+
+Most plugin projects want static CRT (so end-users don't need the VC++ redistributable). Set it before `project()` or the link fails with:
 
 ```
 LNK2038: mismatch detected for 'RuntimeLibrary':
 value 'MD_DynamicRelease' doesn't match value 'MT_StaticRelease'
 ```
 
-Most plugin projects want static CRT (so end-users don't need the VC++ redistributable). Set the runtime library *before* `project()`:
+#### macOS: single-arch binary
+
+Without `CMAKE_OSX_ARCHITECTURES` set before `project()`, the SDK is built for the host runner's arch only (arm64 on Apple Silicon runners, x86_64 on Intel runners). The final plugin link drops to that single arch — buyers on the other Mac architecture cannot load it.
+
+#### Correct order
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 
-# Static MSVC runtime — MUST be set BEFORE project() so it propagates
-# to every target added during project() processing, including the
-# freqlab SDK which is add_subdirectory'd by the cloud-build inject
-# helper. After project() is too late — the SDK has already configured
-# with /MD and the link will fail with LNK2038 mismatch.
+# Toolchain settings — MUST come BEFORE project() so they propagate to
+# every target added during project() processing, including the freqlab
+# SDK which is add_subdirectory'd by the cloud-build inject helper.
 if(WIN32)
+    # Static CRT — most plugins want this so end-users don't need the
+    # VC++ redistributable installed.
     set(CMAKE_MSVC_RUNTIME_LIBRARY
         "MultiThreaded$<$<CONFIG:Debug>:Debug>"
         CACHE INTERNAL "")
+endif()
+
+if(APPLE)
+    # Universal binary — Apple Silicon CI runners cross-compile to
+    # x86_64 because the Xcode toolchain ships both SDKs.
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "")
+    set(CMAKE_OSX_ARCHITECTURES   "arm64;x86_64" CACHE STRING "")
 endif()
 
 project(MyPlugin VERSION 1.0.0)
 # ... rest of CMakeLists ...
 ```
 
-macOS and Linux are unaffected — they don't have an equivalent static-vs-dynamic C-runtime split.
+Linux builds aren't affected — no equivalent toolchain-mode settings need to flow into the SDK subdirectory.
 
 ---
 

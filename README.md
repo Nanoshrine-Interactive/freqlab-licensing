@@ -116,6 +116,12 @@ value 'MD_DynamicRelease' doesn't match value 'MT_StaticRelease'
 
 Without `CMAKE_OSX_ARCHITECTURES` set before `project()`, the SDK is built for the host runner's arch only (arm64 on Apple Silicon runners, x86_64 on Intel runners). The final plugin link drops to that single arch — buyers on the other Mac architecture cannot load it.
 
+#### macOS deployment target floor
+
+The licensing SDK uses `std::filesystem` (C++17), which Apple's libc++ marks as "introduced in macOS 10.15". Set `CMAKE_OSX_DEPLOYMENT_TARGET` to **10.15 or later** in your `CMakeLists.txt`. Lower targets will compile against the stub fine, but cloud builds with licensing enabled will fail with `error: 'path' is unavailable: introduced in macOS 10.15` once the real SDK gets injected.
+
+> 10.15 (Catalina, Oct 2019) is the practical minimum even outside licensing — most JUCE / iPlug2 templates default there.
+
 #### Correct order
 
 ```cmake

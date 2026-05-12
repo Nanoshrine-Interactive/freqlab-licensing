@@ -89,6 +89,41 @@ target_link_libraries(MyPlugin PRIVATE freqlab::licensing)
 
 ---
 
+### Windows: set the MSVC runtime library BEFORE `project()`
+
+The freqlab cloud build pipeline injects the SDK via `-DCMAKE_PROJECT_INCLUDE=<sdk>/freqlab_inject.cmake`. This helper fires *during* `project()` and runs `add_subdirectory(<sdk>/cpp)` immediately — so the SDK's targets get configured as soon as your `project()` line executes.
+
+If you set `CMAKE_MSVC_RUNTIME_LIBRARY` to static (`/MT`) **after** `project()`, the SDK has already been compiled with the default (`/MD`) by then, and the link step fails with:
+
+```
+LNK2038: mismatch detected for 'RuntimeLibrary':
+value 'MD_DynamicRelease' doesn't match value 'MT_StaticRelease'
+```
+
+Most plugin projects want static CRT (so end-users don't need the VC++ redistributable). Set the runtime library *before* `project()`:
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+
+# Static MSVC runtime — MUST be set BEFORE project() so it propagates
+# to every target added during project() processing, including the
+# freqlab SDK which is add_subdirectory'd by the cloud-build inject
+# helper. After project() is too late — the SDK has already configured
+# with /MD and the link will fail with LNK2038 mismatch.
+if(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        CACHE INTERNAL "")
+endif()
+
+project(MyPlugin VERSION 1.0.0)
+# ... rest of CMakeLists ...
+```
+
+macOS and Linux are unaffected — they don't have an equivalent static-vs-dynamic C-runtime split.
+
+---
+
 ## Initialize the cache at startup
 
 The SDK's in-memory cache starts at `Status::NoConfig`. Call `refresh()` (Rust) / `refreshAsync()` (C++) once when your plugin loads so subsequent `current_status()` reads reflect the on-disk license state. Without this step, your licensing UI will think the build has no licensing wired up and stay hidden.

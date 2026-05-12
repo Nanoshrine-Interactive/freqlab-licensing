@@ -56,6 +56,14 @@ cmake -S . -B build -DFREQLAB_LICENSING_DEV_TAMPERED=ON
 # etc.
 ```
 
+> **Do not force-default these in your seller `CMakeLists.txt`** — e.g.
+> `set(FREQLAB_LICENSING_DEV_LICENSED ON CACHE BOOL ... FORCE)`. The same
+> path is taken by cloud builds with licensing disabled (where the SDK is
+> not injected and FetchContent of this stub runs), so a force-default
+> would surface a Licensed indicator in an unlicensed cloud build —
+> contradicting the buyer's signal that the build has no licensing wired
+> up. Keep these as CLI-only overrides for local UI iteration.
+
 ---
 
 ## Install

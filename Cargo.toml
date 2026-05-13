@@ -12,6 +12,12 @@ keywords = ["audio", "plugin", "vst", "licensing", "freqlab"]
 categories = ["multimedia::audio", "development-tools"]
 readme = "README.md"
 
+# Reference plugins under `examples/` are self-contained crates with
+# their own framework deps (nih-plug, etc.). They're not part of this
+# crate's build graph; excluding them keeps `cargo publish` and
+# `cargo package` tarballs lean.
+exclude = ["examples/", "build/", "build-devtest/", "target/"]
+
 [lib]
 name = "freqlab_licensing"
 path = "src/lib.rs"

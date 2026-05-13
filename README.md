@@ -10,6 +10,8 @@ cloud build, licensed     →  real implementation (NotActivated → Licensed fl
 
 The `NoConfig` signal is your cue to hide the licensing UI entirely. In licensed cloud builds the SDK returns `NotActivated` (no `.lic` file yet) or `Licensed` (after activation), so your activate UI shows up in exactly the right place.
 
+> **Looking for reference plugins?** The [`examples/`](./examples) folder contains complete JUCE, iPlug2, and nih-plug projects showing the full licensing UI surface (status pill, sticky banner, license modal) plus the audio-side helper pattern. Examples are self-contained and are **not** part of this crate / library's build graph - they don't get pulled into your plugin when you depend on `freqlab-licensing`.
+
 ---
 
 ## Behavior in a local (stub) build
@@ -56,11 +58,11 @@ cmake -S . -B build -DFREQLAB_LICENSING_DEV_TAMPERED=ON
 # etc.
 ```
 
-> **Do not force-default these in your seller `CMakeLists.txt`** — e.g.
+> **Do not force-default these in your seller `CMakeLists.txt`** - e.g.
 > `set(FREQLAB_LICENSING_DEV_LICENSED ON CACHE BOOL ... FORCE)`. The same
 > path is taken by cloud builds with licensing disabled (where the SDK is
 > not injected and FetchContent of this stub runs), so a force-default
-> would surface a Licensed indicator in an unlicensed cloud build —
+> would surface a Licensed indicator in an unlicensed cloud build -
 > contradicting the buyer's signal that the build has no licensing wired
 > up. Keep these as CLI-only overrides for local UI iteration.
 
@@ -99,7 +101,7 @@ target_link_libraries(MyPlugin PRIVATE freqlab::licensing)
 
 ### Toolchain settings must come BEFORE `project()`
 
-The freqlab cloud build pipeline injects the SDK via `-DCMAKE_PROJECT_INCLUDE=<sdk>/freqlab_inject.cmake`. This helper fires *during* `project()` and runs `add_subdirectory(<sdk>/cpp)` immediately — so the SDK's targets get configured as soon as your `project()` line executes.
+The freqlab cloud build pipeline injects the SDK via `-DCMAKE_PROJECT_INCLUDE=<sdk>/freqlab_inject.cmake`. This helper fires *during* `project()` and runs `add_subdirectory(<sdk>/cpp)` immediately - so the SDK's targets get configured as soon as your `project()` line executes.
 
 Anything set *after* `project()` (CRT type, OSX archs, deployment target, etc.) won't apply to the SDK. Mismatches surface at link time:
 
@@ -114,24 +116,24 @@ value 'MD_DynamicRelease' doesn't match value 'MT_StaticRelease'
 
 #### macOS: single-arch binary
 
-Without `CMAKE_OSX_ARCHITECTURES` set before `project()`, the SDK is built for the host runner's arch only (arm64 on Apple Silicon runners, x86_64 on Intel runners). The final plugin link drops to that single arch — buyers on the other Mac architecture cannot load it.
+Without `CMAKE_OSX_ARCHITECTURES` set before `project()`, the SDK is built for the host runner's arch only (arm64 on Apple Silicon runners, x86_64 on Intel runners). The final plugin link drops to that single arch - buyers on the other Mac architecture cannot load it.
 
 #### macOS deployment target floor
 
 The licensing SDK uses `std::filesystem` (C++17), which Apple's libc++ marks as "introduced in macOS 10.15". Set `CMAKE_OSX_DEPLOYMENT_TARGET` to **10.15 or later** in your `CMakeLists.txt`. Lower targets will compile against the stub fine, but cloud builds with licensing enabled will fail with `error: 'path' is unavailable: introduced in macOS 10.15` once the real SDK gets injected.
 
-> 10.15 (Catalina, Oct 2019) is the practical minimum even outside licensing — most JUCE / iPlug2 templates default there.
+> 10.15 (Catalina, Oct 2019) is the practical minimum even outside licensing - most JUCE / iPlug2 templates default there.
 
 #### Correct order
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 
-# Toolchain settings — MUST come BEFORE project() so they propagate to
+# Toolchain settings - MUST come BEFORE project() so they propagate to
 # every target added during project() processing, including the freqlab
 # SDK which is add_subdirectory'd by the cloud-build inject helper.
 if(WIN32)
-    # Static CRT — most plugins want this so end-users don't need the
+    # Static CRT - most plugins want this so end-users don't need the
     # VC++ redistributable installed.
     set(CMAKE_MSVC_RUNTIME_LIBRARY
         "MultiThreaded$<$<CONFIG:Debug>:Debug>"
@@ -139,7 +141,7 @@ if(WIN32)
 endif()
 
 if(APPLE)
-    # Universal binary — Apple Silicon CI runners cross-compile to
+    # Universal binary - Apple Silicon CI runners cross-compile to
     # x86_64 because the Xcode toolchain ships both SDKs.
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "")
     set(CMAKE_OSX_ARCHITECTURES   "arm64;x86_64" CACHE STRING "")
@@ -149,7 +151,7 @@ project(MyPlugin VERSION 1.0.0)
 # ... rest of CMakeLists ...
 ```
 
-Linux builds aren't affected — no equivalent toolchain-mode settings need to flow into the SDK subdirectory.
+Linux builds aren't affected - no equivalent toolchain-mode settings need to flow into the SDK subdirectory.
 
 ---
 

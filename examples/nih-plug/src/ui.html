@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nihplugtest</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            height: 100vh;
+            user-select: none;
+            overflow: hidden;
+        }
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        /* ═══ Status banner - sticky, solid background ═══ */
+        .lic-banner {
+            display: none;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+        }
+        .lic-banner.show { display: block; }
+        .lic-banner.not-activated { background: #3a2810; color: #ffcb7a; border-bottom-color: rgba(255,170,68,0.55); }
+        .lic-banner.expired       { background: #3a1814; color: #ff8e7a; border-bottom-color: rgba(255,68,34,0.55); }
+        .lic-banner.tampered      { background: #2e1a3a; color: #d49bff; border-bottom-color: rgba(187,85,255,0.55); }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* ═══ Status pill - top-right corner ═══ */
+        .lic-pill {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .lic-pill.show { display: inline-flex; }
+        .lic-pill:hover { background: rgba(0,0,0,0.5); }
+        .lic-pill::before {
+            content: '';
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 4px currentColor;
+        }
+        .lic-pill.licensed     { color: #44ff88; }
+        .lic-pill.trial        { color: #66ccff; }
+        .lic-pill.grace        { color: #ffcc44; }
+        .lic-pill.expired      { color: #ff6655; }
+        .lic-pill.not-activated{ color: #ffaa44; }
+        .lic-pill.tampered     { color: #bb55ff; }
+
+        h1 { font-size: 24px; font-weight: 600; margin-bottom: 30px; color: #fff; }
+        .control { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .control label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; }
+        .control input[type="range"] {
+            width: 200px; height: 6px;
+            -webkit-appearance: none;
+            background: #333; border-radius: 3px; outline: none;
+        }
+        .control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            background: #4ecdc4; border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .value-display { font-size: 14px; font-weight: 500; color: #4ecdc4; }
+
+        /* ═══ License modal ═══ */
+        .lic-modal {
+            position: fixed; inset: 0;
+            display: none;
+            align-items: center; justify-content: center;
+            background: rgba(5,5,15,0.93);
+            z-index: 100;
+        }
+        .lic-modal.show { display: flex; }
+        .lic-modal-panel {
+            width: 320px;
+            background: #060612;
+            border: 2px solid #00aaff;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 0 30px rgba(0,170,255,0.2);
+        }
+        .lic-modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px;
+        }
+        .lic-modal-header h2 { font-size: 13px; font-weight: 700; color: #66ccff; letter-spacing: 1.5px; }
+        .lic-modal-close {
+            background: none; border: none;
+            color: #888; font-size: 16px; cursor: pointer;
+            padding: 0 4px;
+        }
+        .lic-modal-close:hover { color: #fff; }
+        .lic-status-line {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 12px;
+        }
+        .lic-status-line.licensed     { color: #44ff88; border-color: rgba(0,255,100,0.4); }
+        .lic-status-line.trial        { color: #66ccff; border-color: rgba(102,204,255,0.4); }
+        .lic-status-line.grace        { color: #ffcc44; border-color: rgba(255,204,68,0.4); }
+        .lic-status-line.expired      { color: #ff6655; border-color: rgba(255,102,85,0.4); }
+        .lic-status-line.not-activated{ color: #ffaa44; border-color: rgba(255,170,68,0.4); }
+        .lic-status-line.tampered     { color: #bb55ff; border-color: rgba(187,85,255,0.4); }
+        .lic-key-input {
+            width: 100%;
+            padding: 8px 10px;
+            background: #050510;
+            border: 1px solid #1a1a66;
+            border-radius: 4px;
+            color: #ddd;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .lic-key-input:focus { outline: none; border-color: #00aaff; }
+        .lic-buttons { display: flex; gap: 8px; }
+        .lic-btn {
+            flex: 1;
+            padding: 7px 12px;
+            background: transparent;
+            border: 1px solid;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .lic-btn.activate   { border-color: #66ccff; color: #66ccff; }
+        .lic-btn.activate:hover:not(:disabled)   { background: rgba(102,204,255,0.12); }
+        .lic-btn.deactivate { border-color: #ff6688; color: #ff6688; }
+        .lic-btn.deactivate:hover:not(:disabled) { background: rgba(255,102,136,0.12); }
+        .lic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .lic-error { font-size: 10px; color: #ff6688; margin-top: 8px; min-height: 14px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="lic-banner" id="lic-banner"></div>
+
+        <div class="main">
+            <div class="lic-pill" id="lic-pill"><span id="lic-pill-text">Unknown</span></div>
+
+            <h1>Nihplugtest</h1>
+            <div class="control">
+                <label>Gain</label>
+                <input type="range" id="gain" min="0" max="1" step="0.001" value="0.5">
+                <span class="value-display" id="gain-value">0.0 dB</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="lic-modal" id="lic-modal">
+        <div class="lic-modal-panel">
+            <div class="lic-modal-header">
+                <h2>LICENSE</h2>
+                <button class="lic-modal-close" id="lic-close">×</button>
+            </div>
+            <div class="lic-status-line" id="lic-status-line">UNKNOWN</div>
+            <input type="text" class="lic-key-input" id="lic-key" placeholder="XXXX-XXXX-XXXX-XXXX">
+            <div class="lic-buttons" id="lic-buttons">
+                <button class="lic-btn activate"   id="lic-activate">ACTIVATE</button>
+                <button class="lic-btn deactivate" id="lic-deactivate">DEACTIVATE</button>
+            </div>
+            <div class="lic-error" id="lic-error"></div>
+        </div>
+    </div>
+
+    <script>
+        const gainSlider = document.getElementById('gain');
+        const gainValue  = document.getElementById('gain-value');
+
+        const licPill        = document.getElementById('lic-pill');
+        const licPillText    = document.getElementById('lic-pill-text');
+        const licBanner      = document.getElementById('lic-banner');
+        const licModal       = document.getElementById('lic-modal');
+        const licClose       = document.getElementById('lic-close');
+        const licStatusLine  = document.getElementById('lic-status-line');
+        const licKey         = document.getElementById('lic-key');
+        const licButtons     = document.getElementById('lic-buttons');
+        const licActivate    = document.getElementById('lic-activate');
+        const licDeactivate  = document.getElementById('lic-deactivate');
+        const licError       = document.getElementById('lic-error');
+
+        function sendToPlugin(msg) {
+            window.ipc.postMessage(JSON.stringify(msg));
+        }
+
+        // Status → (pill class, pill label, modal class, modal label, banner class, banner copy)
+        const STATUS_CONFIG = {
+            'Licensed':     { cls: 'licensed',      label: 'Licensed',      modalLabel: 'LICENSED',      banner: null, bannerCopy: '' },
+            'Trial':        { cls: 'trial',         label: 'Trial',         modalLabel: 'TRIAL',         banner: null, bannerCopy: '' },
+            'GracePeriod':  { cls: 'grace',         label: 'Expiring soon', modalLabel: 'EXPIRING SOON', banner: null, bannerCopy: '' },
+            'Expired':      { cls: 'expired',       label: 'Expired',       modalLabel: 'EXPIRED',       banner: 'expired',
+                              bannerCopy: 'Your license has expired. Renew to continue using this plugin.' },
+            'NotActivated': { cls: 'not-activated', label: 'Not activated', modalLabel: 'NOT ACTIVATED', banner: 'not-activated',
+                              bannerCopy: 'This plugin is not activated. Click to enter your license key.' },
+            'Tampered':     { cls: 'tampered',      label: 'License invalid', modalLabel: 'LICENSE INVALID', banner: 'tampered',
+                              bannerCopy: 'License could not be verified. Please reinstall the plugin.' },
+        };
+
+        function applyLicenseState(state) {
+            // NoConfig → hide everything (stub build, licensing not wired up)
+            if (!state.active) {
+                licPill.classList.remove('show');
+                licBanner.classList.remove('show');
+                return;
+            }
+            const cfg = STATUS_CONFIG[state.status] || STATUS_CONFIG['NotActivated'];
+
+            // Pill
+            licPill.className = 'lic-pill show ' + cfg.cls;
+            licPillText.textContent = cfg.label;
+
+            // Banner - sticky on bad states
+            if (cfg.banner) {
+                licBanner.className = 'lic-banner show ' + cfg.banner;
+                licBanner.textContent = cfg.bannerCopy;
+            } else {
+                licBanner.classList.remove('show');
+            }
+
+            // Modal status line
+            licStatusLine.className = 'lic-status-line ' + cfg.cls;
+            licStatusLine.textContent = cfg.modalLabel;
+
+            // Hide key input + Activate when fully Licensed. Deactivate
+            // becomes the only action; stretch it full width.
+            const isLicensed = (state.status === 'Licensed');
+            licKey.style.display = isLicensed ? 'none' : '';
+            licActivate.style.display = isLicensed ? 'none' : '';
+
+            licDeactivate.disabled = (state.status === 'NotActivated' || state.status === 'NoConfig');
+
+            licError.textContent = state.error || '';
+        }
+
+        function openLicenseModal() {
+            sendToPlugin({ type: 'QueryLicense' });
+            licError.textContent = '';
+            licModal.classList.add('show');
+        }
+        function closeLicenseModal() { licModal.classList.remove('show'); }
+
+        licPill.addEventListener('click', openLicenseModal);
+        licBanner.addEventListener('click', openLicenseModal);
+        licClose.addEventListener('click', closeLicenseModal);
+        licModal.addEventListener('click', (e) => { if (e.target === licModal) closeLicenseModal(); });
+
+        licActivate.addEventListener('click', () => {
+            const key = licKey.value.trim();
+            if (!key) { licError.textContent = 'Enter a license key first'; return; }
+            licError.textContent = '';
+            sendToPlugin({ type: 'ActivateLicense', key });
+        });
+        licDeactivate.addEventListener('click', () => {
+            licError.textContent = '';
+            sendToPlugin({ type: 'DeactivateLicense' });
+        });
+
+        window.onPluginMessage = function(msg) {
+            if (msg.type === 'param_change' && msg.param === 'gain') {
+                gainSlider.value = msg.value;
+                gainValue.textContent = msg.text;
+            } else if (msg.type === 'license_state') {
+                applyLicenseState(msg);
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            sendToPlugin({ type: 'Init' });
+        });
+
+        gainSlider.addEventListener('input', (e) => {
+            sendToPlugin({ type: 'SetGain', value: parseFloat(e.target.value) });
+        });
+    </script>
+</body>
+</html>

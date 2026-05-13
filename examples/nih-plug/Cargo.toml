@@ -1,0 +1,26 @@
+[package]
+name = "nihplugtest"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = ""
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "28b149ec" }
+# Forked nih-plug-webview with Tauri compatibility and hot reload support
+nih_plug_webview = { git = "https://github.com/Nanoshrine-Interactive/nih-plug-webview" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# freqlab licensing. Cloud build pipeline swaps this for the real
+# implementation when applyLicensing=true. Pick a dev-* feature to
+# preview each status state locally:
+#   features = ["dev-not-activated"]   # fresh install (orange)
+#   features = ["dev-licensed"]        # activated + valid (green)
+#   features = ["dev-expired"]         # past expiry (red)
+#   features = ["dev-tampered"]        # signature failed (purple)
+#   features = ["dev-grace"]           # expiring soon (amber)
+#   features = ["dev-trial"]           # trial active (blue)
+freqlab-licensing = { git = "https://github.com/Nanoshrine-Interactive/freqlab-licensing", branch = "main" }

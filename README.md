@@ -151,8 +151,6 @@ project(MyPlugin VERSION 1.0.0)
 # ... rest of CMakeLists ...
 ```
 
-Linux builds aren't affected - no equivalent toolchain-mode settings need to flow into the SDK subdirectory.
-
 ---
 
 ## Initialize the cache at startup

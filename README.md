@@ -177,7 +177,7 @@ The cloud build pipeline runs a source-rewrite pass that transforms `// @freqlab
 
 | Tag | Status | Effect at build time |
 |---|---|---|
-| `// @freqlab:require-license` | shipping | Wraps the next function definition's body with a `currentStatus() == Licensed` gate. The behavior when invalid is configured per-product in freqlab Distro. |
+| `// @freqlab:require-license` | shipping | Wraps the next function definition's body with a license gate that returns early on invalid statuses. The default response is silence; sellers can customize via an optional `freqlab_response.{h,rs}` helper file (see [Customizing invalid-status response](#customizing-invalid-status-response-optional)). |
 | `// @freqlab:require-feature("X")` | reserved | Will gate a statement on entitlement to feature `"X"`. Today emits a warning into the build report. |
 | `// @freqlab:integrity-check` | reserved | Anti-debug hook. Today a no-op. |
 | `// @freqlab:status -> bool` | reserved | Will replace the marked declaration with one that returns `currentStatus() == Licensed`. Today a no-op. |
@@ -204,9 +204,114 @@ void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override 
 
 ---
 
+## Customizing invalid-status response (optional)
+
+By default, a `// @freqlab:require-license` wrap returns early on invalid statuses (Expired / NotActivated / Tampered), leaving the output buffer untouched. For most plugins this is the right default - the host hears silence.
+
+If you want something different (a watermark noise burst on Expired, a banner-only nag with audio still playing, scrambled output on Tampered, etc.), ship a `freqlab_response.{h,rs}` file with your plugin. The cloud-build transformer detects it automatically and delegates the per-status decision to your code. **No flag, no opt-in - just put the file in your project tree and the transformer picks it up on the next build.**
+
+### Where the transformer looks for it
+
+The transformer walks up from each marked file's directory until it hits a project-root marker (`Cargo.toml` for Rust, `CMakeLists.txt` for C++). Canonical locations:
+
+- **Rust:** `src/freqlab_response.rs`, plus a `mod freqlab_response;` declaration in your crate root.
+- **C++:** `src/freqlab_response.h`, `include/freqlab_response.h`, or any directory between the marked file and the project root. Include it from the source file containing the marked function (`#include "freqlab_response.h"`).
+
+If the transformer finds the helper, it emits a call to your `freqlab_should_run_dsp(...)` from the wrap. If not, it falls back to an inline `currentStatus()` check (default: silence). Both paths are lock-free atomic reads - no audio-thread allocation either way.
+
+### Default helper bodies
+
+The bodies below mirror what the [example projects](./examples) ship. Drop them into your project and edit the match arms to taste.
+
+**Rust** (`src/freqlab_response.rs`):
+
+```rust
+use freqlab_licensing as licensing;
+use nih_plug::prelude::Buffer;  // or your framework's buffer type
+
+pub fn freqlab_should_run_dsp(buffer: &mut Buffer) -> bool {
+    use licensing::Status;
+    match licensing::current_status() {
+        // Run DSP normally.
+        Status::Licensed | Status::Trial | Status::GracePeriod | Status::NoConfig => true,
+
+        // Invalid: silence. Edit these arms to customize.
+        Status::Expired | Status::NotActivated | Status::Tampered => {
+            for channel_samples in buffer.iter_samples() {
+                for sample in channel_samples { *sample = 0.0; }
+            }
+            false
+        }
+    }
+}
+```
+
+**C++ / JUCE** (`src/freqlab_response.h`):
+
+```cpp
+#pragma once
+#include "freqlab_licensing.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+
+inline bool freqlab_should_run_dsp(juce::AudioBuffer<float>& buffer) {
+    using S = ::freqlab::licensing::Status;
+    switch (::freqlab::licensing::currentStatus()) {
+        case S::Licensed:
+        case S::Trial:
+        case S::GracePeriod:
+        case S::NoConfig:
+            return true;
+        case S::Expired:
+        case S::NotActivated:
+        case S::Tampered:
+            buffer.clear();
+            return false;
+    }
+    return true;
+}
+```
+
+**C++ / iPlug2** uses a three-argument helper because `ProcessBlock` doesn't carry channel-count metadata in its buffer type:
+
+```cpp
+inline bool freqlab_should_run_dsp(iplug::sample** outputs, int nChans, int nFrames) {
+    using S = ::freqlab::licensing::Status;
+    switch (::freqlab::licensing::currentStatus()) {
+        case S::Licensed:
+        case S::Trial:
+        case S::GracePeriod:
+        case S::NoConfig:
+            return true;
+        case S::Expired:
+        case S::NotActivated:
+        case S::Tampered:
+            for (int c = 0; c < nChans; ++c)
+                std::memset(outputs[c], 0, sizeof(iplug::sample) * static_cast<size_t>(nFrames));
+            return false;
+    }
+    return true;
+}
+```
+
+### Common customizations
+
+- **Watermark on Expired** (keep audio playing but with degraded quality): on the `Expired` arm, mix a noise burst into `buffer` and `return true`.
+- **Banner-only nag** (UI warning but no audio change): on `Expired` / `NotActivated` arms, `return true`. The pill/banner in your editor still shows the bad state.
+- **Strict Tampered handling** (more aggressive than silence): on `Tampered`, scramble the buffer or write white noise instead of zeroing.
+
+Anything you write into the helper runs in place of the default behavior on invalid statuses.
+
+> **Audio-thread safety:** only `currentStatus()` / `current_status()` is safe to call from inside the helper. Don't call `current()`, `refreshAsync()`, `validateAndActivate()`, or anything else that allocates or does I/O.
+
+### Reference implementations
+
+Full working examples for all three frameworks (with status pill, banner, and modal UI on top of the helper) live in [`examples/`](./examples). Each example's `freqlab_response.{h,rs}` is a 1:1 starting point you can copy verbatim and edit.
+
+---
+
 ## Status display in your UI
 
-How your plugin behaves when the license is invalid is configured per-product in freqlab Distro (when you enable licensing on a product). The audio side is handled for you by the `// @freqlab:require-license` tag.
+How your plugin behaves when the license is invalid is decided by your `freqlab_response.{h,rs}` helper file (see [Customizing invalid-status response](#customizing-invalid-status-response-optional)). If you don't ship one, the audio side defaults to silence on invalid statuses - the `// @freqlab:require-license` tag handles the gate at the top of your audio function.
 
 ### Hide your licensing UI when the build has no licensing wired up
 

@@ -12,6 +12,7 @@ enum EParams {
 class Iplugtest final : public iplug::Plugin {
 public:
     Iplugtest(const iplug::InstanceInfo& info);
+    ~Iplugtest() override;
 
     void OnReset() override;
     void OnParamChange(int paramIdx) override;

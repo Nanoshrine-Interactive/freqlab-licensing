@@ -171,6 +171,53 @@ In stub builds (with or without a `dev-*` feature) this is a no-op, so the same 
 
 ---
 
+## Shut down workers on plugin teardown
+
+The SDK runs licensing network calls on background workers. If the DAW unloads your plugin DLL/dylib while one of those workers is still running, the worker executes against unmapped code and crashes the host. Call `shutdown()` from your plugin's destructor / `Drop` impl to flip a cancellation flag, give workers a chance to exit at their next checkpoint, and (C++ only) block briefly until they do. Stub builds make `shutdown()` a no-op.
+
+```cpp
+// JUCE / iPlug2 — call from your plugin destructor:
+MyProcessor::~MyProcessor() {
+    freqlab::licensing::shutdown();
+}
+```
+
+```rust
+// nih-plug / custom Rust plugins — the typical pattern:
+// the SDK's `refresh` / `validate_and_activate` / `deactivate_this_machine`
+// are blocking, so sellers wrap them in their own `std::thread::spawn` and
+// own the JoinHandle. `shutdown()` flips a process-static flag that workers
+// poll between I/O steps; the seller then joins their thread.
+struct MyPlugin {
+    refresh_handle: Option<std::thread::JoinHandle<()>>,
+    // ...
+}
+
+impl MyPlugin {
+    fn start_refresh(&mut self) {
+        self.refresh_handle = Some(std::thread::spawn(|| {
+            let _ = freqlab_licensing::refresh();
+        }));
+    }
+}
+
+impl Drop for MyPlugin {
+    fn drop(&mut self) {
+        freqlab_licensing::shutdown();
+        if let Some(h) = self.refresh_handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+```
+
+Notes:
+- `shutdown()` is cooperative, not preemptive. It cancels at the **next I/O seam** in the worker (between validate, self-heal, re-checkout, check-in, heartbeat). A worker mid-HTTP-syscall will stay there until the syscall returns or the HTTP timeout (10s) elapses.
+- C++ `shutdown()` blocks up to 2s for workers to drain. Rust `shutdown()` returns immediately; you call `.join()` on your own thread handle.
+- Idempotent and safe to call when no workers are active.
+
+---
+
 ## Tags
 
 The cloud build pipeline runs a source-rewrite pass that transforms `// @freqlab:…` comment tags. Local builds ignore them (they are just comments).
@@ -386,6 +433,7 @@ pub fn current_status() -> Status;                                       // audi
 pub fn validate_and_activate(key: &str) -> Result<LicenseInfo, Error>;   // blocking
 pub fn deactivate_this_machine() -> Result<(), Error>;                   // blocking
 pub fn refresh() -> Result<(), Error>;                                   // blocking
+pub fn shutdown();                                                       // flips cancellation flag
 ```
 
 ### C++
@@ -416,6 +464,7 @@ void        validateAndActivate(const std::string& key,
                                 std::function<void(std::string)> onError);
 void        deactivateThisMachine(std::function<void(bool)> done);
 void        refreshAsync();
+void        shutdown();            // call from plugin destructor
 
 }
 ```

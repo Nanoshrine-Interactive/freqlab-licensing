@@ -211,6 +211,10 @@ pub fn refresh() -> Result<(), Error> {
     Err(Error::StubBuild)
 }
 
+/// Signal in-flight SDK workers to cancel at the next checkpoint. Call
+/// from your plugin's `Drop` impl. No-op in the stub.
+pub fn shutdown() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

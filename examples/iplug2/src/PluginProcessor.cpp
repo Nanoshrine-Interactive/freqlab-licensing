@@ -25,6 +25,12 @@ Iplugtest::Iplugtest(const InstanceInfo& info)
 #endif
 }
 
+Iplugtest::~Iplugtest() {
+    // Block until any in-flight SDK worker has exited so the host can
+    // safely unload the plugin dylib.
+    freqlab::licensing::shutdown();
+}
+
 #if IPLUG_EDITOR
 IGraphics* Iplugtest::CreateGraphics() {
     return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS, 1.0f);

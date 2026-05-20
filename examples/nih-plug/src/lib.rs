@@ -43,6 +43,17 @@ impl Default for Nihplugtest {
     }
 }
 
+impl Drop for Nihplugtest {
+    fn drop(&mut self) {
+        // Flip the SDK's cancellation flag so any in-flight refresh /
+        // activate / deactivate worker bails at its next checkpoint
+        // before the host unloads us. This example fires-and-forgets
+        // its workers; a plugin that stores JoinHandles should also
+        // `.join()` them here after calling `shutdown()`.
+        licensing::shutdown();
+    }
+}
+
 impl Default for NihplugtestParams {
     fn default() -> Self {
         let gain_changed = Arc::new(AtomicBool::new(false));

@@ -18,6 +18,9 @@ JucerguyProcessor::JucerguyProcessor()
 
 JucerguyProcessor::~JucerguyProcessor()
 {
+    // Block until any in-flight SDK worker has exited so the host can
+    // safely unload the plugin dylib.
+    freqlab::licensing::shutdown();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout JucerguyProcessor::createParameterLayout()

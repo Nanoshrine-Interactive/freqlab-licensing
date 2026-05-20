@@ -81,6 +81,12 @@ void deactivateThisMachine(std::function<void(bool)> done);
 /// a worker; returns immediately.
 void refreshAsync();
 
+/// Signal in-flight workers to cancel at the next safe checkpoint and block
+/// (up to 2s) until they exit. Call from the plugin's destructor so the host
+/// can safely unload the plugin DLL/dylib without a worker thread executing
+/// against unmapped code. No-op in local builds.
+void shutdown();
+
 }} // namespace freqlab::licensing
 
 #endif // FREQLAB_LICENSING_H

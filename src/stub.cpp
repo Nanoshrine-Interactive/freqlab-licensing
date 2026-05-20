@@ -81,4 +81,6 @@ void deactivateThisMachine(std::function<void(bool)> done) {
 
 void refreshAsync() {}
 
+void shutdown() {}
+
 }} // namespace freqlab::licensing

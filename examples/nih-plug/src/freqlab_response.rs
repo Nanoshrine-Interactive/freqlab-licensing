@@ -22,12 +22,13 @@ use nih_plug::prelude::Buffer;
 pub fn freqlab_should_run_dsp(buffer: &mut Buffer) -> bool {
     use licensing::Status;
     match licensing::current_status() {
-        // Buyer is fully licensed, in a paid trial, in grace period, or
-        // running an unconfigured build (NoConfig = local dev / stub).
-        // Run DSP normally.
+        // Buyer is fully licensed, in a paid trial, in grace period, in
+        // recoverable overdue, or running an unconfigured build
+        // (NoConfig = local dev / stub). Run DSP normally.
         Status::Licensed
         | Status::Trial
         | Status::GracePeriod
+        | Status::Overdue
         | Status::NoConfig => true,
 
         // License is invalid. Default: zero the output buffer (silence)

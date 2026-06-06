@@ -23,6 +23,7 @@
 //! freqlab-licensing = { git = "...", branch = "main", features = ["dev-expired"] }
 //! freqlab-licensing = { git = "...", branch = "main", features = ["dev-tampered"] }
 //! freqlab-licensing = { git = "...", branch = "main", features = ["dev-grace"] }
+//! freqlab-licensing = { git = "...", branch = "main", features = ["dev-overdue"] }
 //! freqlab-licensing = { git = "...", branch = "main", features = ["dev-trial"] }
 //! ```
 //!
@@ -42,7 +43,7 @@ use std::time::SystemTime;
 /// Top-level state of the buyer's license. Defaults to [`Status::NoConfig`]
 /// in local builds. Enable a `dev-*` Cargo feature to bake a different
 /// status for local UI testing (see crate-level docs).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// Valid, in good standing.
     Licensed,
@@ -50,6 +51,9 @@ pub enum Status {
     Trial,
     /// Expiring soon. Still valid; surface a re-activate prompt.
     GracePeriod,
+    /// Missed server-side check-in window. Recoverable via the SDK's
+    /// background check-in; do NOT prompt re-activation.
+    Overdue,
     /// Past expiry.
     Expired,
     /// No license file found on this machine.
@@ -58,13 +62,8 @@ pub enum Status {
     Tampered,
     /// SDK was built without licensing enabled. Submit through the
     /// freqlab cloud with licensing turned on.
+    #[default]
     NoConfig,
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Status::NoConfig
-    }
 }
 
 /// Full snapshot returned by [`current`].
@@ -90,6 +89,11 @@ pub struct LicenseInfo {
     pub heartbeat_duration_secs: u64,
     /// When the next heartbeat is due.
     pub next_heartbeat: Option<SystemTime>,
+    /// Buyer display name from license metadata. Absent for bulk-issued.
+    /// Fall back to [`buyer_email`](LicenseInfo::buyer_email).
+    pub buyer_name: Option<String>,
+    /// Buyer email from license metadata. Absent for bulk-issued.
+    pub buyer_email: Option<String>,
 }
 
 /// Errors returned by the activation / refresh / deactivation paths.
@@ -122,9 +126,9 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::NotConfigured => f.write_str(
-                "freqlab licensing is not configured for this build",
-            ),
+            Error::NotConfigured => {
+                f.write_str("freqlab licensing is not configured for this build")
+            }
             Error::Network(msg) => write!(f, "network error: {msg}"),
             Error::Server { status, reason } => write!(f, "server error {status}: {reason}"),
             Error::InvalidKey(msg) => write!(f, "invalid license key: {msg}"),
@@ -158,16 +162,21 @@ pub fn current() -> LicenseInfo {
     };
     if matches!(
         status,
-        Status::Licensed | Status::Expired | Status::GracePeriod | Status::Trial
+        Status::Licensed | Status::Expired | Status::GracePeriod | Status::Overdue | Status::Trial
     ) {
         info.license_key = Some("DEV-MODE-XXXX-YYYY-ZZZZ".to_owned());
         info.license_id = Some("dev_license_00000000".to_owned());
         info.features = vec!["DEV_FEATURE".to_owned()];
+        info.buyer_name = Some("Dev Tester".to_owned());
+        info.buyer_email = Some("dev@example.com".to_owned());
     }
     if matches!(status, Status::Expired) {
         // Year 2020.
         info.expiry = Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_577_836_800));
-    } else if matches!(status, Status::Licensed | Status::GracePeriod | Status::Trial) {
+    } else if matches!(
+        status,
+        Status::Licensed | Status::GracePeriod | Status::Overdue | Status::Trial
+    ) {
         info.expiry = Some(SystemTime::now() + std::time::Duration::from_secs(365 * 86400));
     }
     info
@@ -185,6 +194,8 @@ pub fn current_status() -> Status {
         Status::Tampered
     } else if cfg!(feature = "dev-grace") {
         Status::GracePeriod
+    } else if cfg!(feature = "dev-overdue") {
+        Status::Overdue
     } else if cfg!(feature = "dev-trial") {
         Status::Trial
     } else if cfg!(any(feature = "dev-mode", feature = "dev-not-activated")) {
@@ -232,6 +243,8 @@ mod tests {
             assert_eq!(s, Status::Tampered);
         } else if cfg!(feature = "dev-grace") {
             assert_eq!(s, Status::GracePeriod);
+        } else if cfg!(feature = "dev-overdue") {
+            assert_eq!(s, Status::Overdue);
         } else if cfg!(feature = "dev-trial") {
             assert_eq!(s, Status::Trial);
         } else if cfg!(any(feature = "dev-mode", feature = "dev-not-activated")) {
@@ -251,15 +264,23 @@ mod tests {
     fn licensed_states_get_fake_fields() {
         let info = current();
         match info.status {
-            Status::Licensed | Status::Expired | Status::GracePeriod | Status::Trial => {
+            Status::Licensed
+            | Status::Expired
+            | Status::GracePeriod
+            | Status::Overdue
+            | Status::Trial => {
                 assert!(info.license_key.is_some(), "should have a fake key");
                 assert!(info.license_id.is_some(), "should have a fake id");
                 assert!(!info.features.is_empty(), "should have fake features");
+                assert!(info.buyer_name.is_some(), "should have a fake buyer_name");
+                assert!(info.buyer_email.is_some(), "should have a fake buyer_email");
             }
             _ => {
                 assert!(info.license_key.is_none());
                 assert!(info.license_id.is_none());
                 assert!(info.features.is_empty());
+                assert!(info.buyer_name.is_none());
+                assert!(info.buyer_email.is_none());
             }
         }
     }

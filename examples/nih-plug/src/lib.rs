@@ -207,6 +207,7 @@ impl Plugin for Nihplugtest {
                         licensing::Status::Licensed => "Licensed",
                         licensing::Status::Trial => "Trial",
                         licensing::Status::GracePeriod => "GracePeriod",
+                        licensing::Status::Overdue => "Overdue",
                         licensing::Status::Expired => "Expired",
                         licensing::Status::NotActivated => "NotActivated",
                         licensing::Status::Tampered => "Tampered",

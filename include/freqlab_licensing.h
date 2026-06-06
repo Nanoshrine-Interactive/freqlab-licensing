@@ -16,9 +16,10 @@
 // Local-build behavior:
 //   currentStatus() returns Status::NoConfig (signal: licensing not wired
 //   up in this build). Set one of the FREQLAB_LICENSING_DEV_* CMake
-//   options (LICENSED, EXPIRED, TAMPERED, GRACE, TRIAL, NOT_ACTIVATED)
-//   to bake a different status for local UI testing. current() returns
-//   matching realistic fake fields (key, expiry, features).
+//   options (LICENSED, EXPIRED, TAMPERED, GRACE, OVERDUE, TRIAL,
+//   NOT_ACTIVATED) to bake a different status for local UI testing.
+//   current() returns matching realistic fake fields (key, expiry,
+//   features, buyer name/email).
 //   validateAndActivate(...) invokes onError synchronously.
 //   refreshAsync() is a no-op. deactivateThisMachine(done) calls done(false).
 
@@ -41,6 +42,7 @@ enum class Status {
     Licensed,       ///< Valid, in good standing.
     Trial,          ///< Trial active. Treat as licensed for plugin behavior.
     GracePeriod,    ///< Expiring soon. Still valid; surface a re-activate prompt.
+    Overdue,        ///< Missed server-side check-in window. Recoverable via the SDK's background check-in; do NOT prompt re-activation.
     Expired,        ///< Past expiry.
     NotActivated,   ///< No license file found on this machine.
     Tampered,       ///< Signature verification failed.
@@ -59,6 +61,8 @@ struct LicenseInfo {
     bool heartbeatRequired = false;
     std::uint64_t heartbeatDurationSecs = 0;
     std::optional<std::chrono::system_clock::time_point> nextHeartbeat;
+    std::optional<std::string> buyerName;   ///< From license metadata; absent for bulk-issued. Fall back to buyerEmail.
+    std::optional<std::string> buyerEmail;  ///< From license metadata; absent for bulk-issued.
 };
 
 /// Return the cached license state.

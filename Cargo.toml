@@ -31,12 +31,13 @@ default = []
 # (UI hidden).
 #
 # If multiple are enabled, precedence is:
-#   dev-licensed > dev-expired > dev-tampered > dev-grace > dev-trial >
-#   dev-not-activated (alias: dev-mode)
+#   dev-licensed > dev-expired > dev-tampered > dev-grace > dev-overdue >
+#   dev-trial > dev-not-activated (alias: dev-mode)
 dev-mode = []                # alias for dev-not-activated (common case)
 dev-not-activated = []       # Status::NotActivated (fresh install)
 dev-licensed = []            # Status::Licensed (activated + valid)
 dev-expired = []             # Status::Expired (past expiry)
 dev-tampered = []            # Status::Tampered (sig verify failed)
 dev-grace = []               # Status::GracePeriod (expiring soon)
+dev-overdue = []             # Status::Overdue (missed check-in; recoverable)
 dev-trial = []               # Status::Trial

@@ -26,11 +26,12 @@ inline bool freqlab_should_run_dsp(iplug::sample** outputs, int nChans, int nFra
     using S = ::freqlab::licensing::Status;
     switch (::freqlab::licensing::currentStatus())
     {
-        // Fully licensed, paid trial, grace period, or unconfigured
-        // build (NoConfig = local dev / stub). Run DSP normally.
+        // Fully licensed, paid trial, grace period, recoverable overdue,
+        // or unconfigured build (NoConfig = local dev / stub). Run DSP normally.
         case S::Licensed:
         case S::Trial:
         case S::GracePeriod:
+        case S::Overdue:
         case S::NoConfig:
             return true;
 

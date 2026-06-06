@@ -25,13 +25,14 @@ To test how your UI renders a specific status without doing a cloud build, enabl
 | State | Cargo feature | CMake option | What `current()` returns |
 |---|---|---|---|
 | `NotActivated` (fresh install) | `dev-not-activated` (alias: `dev-mode`) | `FREQLAB_LICENSING_DEV_NOT_ACTIVATED` | empty `LicenseInfo` with status |
-| `Licensed` | `dev-licensed` | `FREQLAB_LICENSING_DEV_LICENSED` | fake key + id + features + future expiry |
+| `Licensed` | `dev-licensed` | `FREQLAB_LICENSING_DEV_LICENSED` | fake key + id + features + future expiry + buyer name/email |
 | `Expired` | `dev-expired` | `FREQLAB_LICENSING_DEV_EXPIRED` | fake key + past expiry (2020) |
 | `Tampered` | `dev-tampered` | `FREQLAB_LICENSING_DEV_TAMPERED` | empty `LicenseInfo` with status |
 | `GracePeriod` | `dev-grace` | `FREQLAB_LICENSING_DEV_GRACE` | fake key + future expiry |
+| `Overdue` | `dev-overdue` | `FREQLAB_LICENSING_DEV_OVERDUE` | fake key + future expiry (recoverable; plays audio) |
 | `Trial` | `dev-trial` | `FREQLAB_LICENSING_DEV_TRIAL` | fake key + future expiry |
 
-The fake `license_key` (`DEV-MODE-XXXX-YYYY-ZZZZ`), `license_id`, `expiry`, and `features` fields let your UI render every state with realistic data.
+The fake `license_key` (`DEV-MODE-XXXX-YYYY-ZZZZ`), `license_id`, `expiry`, `features`, and buyer name/email (`Dev Tester` / `dev@example.com`) let your UI render every state with realistic data.
 
 ### Toggling
 
@@ -46,6 +47,7 @@ freqlab-licensing = { git = "...", branch = "main", features = ["dev-licensed"] 
 freqlab-licensing = { git = "...", branch = "main", features = ["dev-expired"] }
 freqlab-licensing = { git = "...", branch = "main", features = ["dev-tampered"] }
 freqlab-licensing = { git = "...", branch = "main", features = ["dev-grace"] }
+freqlab-licensing = { git = "...", branch = "main", features = ["dev-overdue"] }
 freqlab-licensing = { git = "...", branch = "main", features = ["dev-trial"] }
 ```
 
@@ -280,7 +282,7 @@ pub fn freqlab_should_run_dsp(buffer: &mut Buffer) -> bool {
     use licensing::Status;
     match licensing::current_status() {
         // Run DSP normally.
-        Status::Licensed | Status::Trial | Status::GracePeriod | Status::NoConfig => true,
+        Status::Licensed | Status::Trial | Status::GracePeriod | Status::Overdue | Status::NoConfig => true,
 
         // Invalid: silence. Edit these arms to customize.
         Status::Expired | Status::NotActivated | Status::Tampered => {
@@ -306,6 +308,7 @@ inline bool freqlab_should_run_dsp(juce::AudioBuffer<float>& buffer) {
         case S::Licensed:
         case S::Trial:
         case S::GracePeriod:
+        case S::Overdue:
         case S::NoConfig:
             return true;
         case S::Expired:
@@ -327,6 +330,7 @@ inline bool freqlab_should_run_dsp(iplug::sample** outputs, int nChans, int nFra
         case S::Licensed:
         case S::Trial:
         case S::GracePeriod:
+        case S::Overdue:
         case S::NoConfig:
             return true;
         case S::Expired:
@@ -392,8 +396,11 @@ match freqlab_licensing::current_status() {
 
 ```cpp
 // 1-2 Hz juce::Timer::timerCallback (C++)
+// Overdue is recoverable (the SDK clears it on the next background
+// check-in); only show the banner on the actual error states.
 const auto s = freqlab::licensing::currentStatus();
-banner.setVisible(s != freqlab::licensing::Status::Licensed);
+using S = freqlab::licensing::Status;
+banner.setVisible(s == S::Expired || s == S::NotActivated || s == S::Tampered);
 banner.setText(statusBannerText(s), juce::dontSendNotification);
 ```
 
@@ -405,7 +412,7 @@ banner.setText(statusBannerText(s), juce::dontSendNotification);
 
 ```rust
 pub enum Status {
-    Licensed, Trial, GracePeriod, Expired,
+    Licensed, Trial, GracePeriod, Overdue, Expired,
     NotActivated, Tampered, NoConfig,
 }
 
@@ -420,6 +427,8 @@ pub struct LicenseInfo {
     pub heartbeat_required: bool,
     pub heartbeat_duration_secs: u64,
     pub next_heartbeat: Option<SystemTime>,
+    pub buyer_name: Option<String>,   // from license metadata; absent for bulk-issued
+    pub buyer_email: Option<String>,  // fall back to this when buyer_name is absent
 }
 
 pub enum Error {
@@ -441,7 +450,7 @@ pub fn shutdown();                                                       // flip
 ```cpp
 namespace freqlab::licensing {
 
-enum class Status { Licensed, Trial, GracePeriod, Expired,
+enum class Status { Licensed, Trial, GracePeriod, Overdue, Expired,
                     NotActivated, Tampered, NoConfig };
 
 struct LicenseInfo {
@@ -455,6 +464,8 @@ struct LicenseInfo {
     bool heartbeatRequired;
     std::uint64_t heartbeatDurationSecs;
     std::optional<std::chrono::system_clock::time_point> nextHeartbeat;
+    std::optional<std::string> buyerName;   // from license metadata; absent for bulk-issued
+    std::optional<std::string> buyerEmail;  // fall back to this when buyerName is absent
 };
 
 LicenseInfo current();             // ~5µs, allocates if features non-empty

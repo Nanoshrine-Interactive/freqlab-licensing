@@ -6,6 +6,7 @@ namespace
     constexpr int kStatusLicensed     = static_cast<int>(freqlab::licensing::Status::Licensed);
     constexpr int kStatusTrial        = static_cast<int>(freqlab::licensing::Status::Trial);
     constexpr int kStatusGracePeriod  = static_cast<int>(freqlab::licensing::Status::GracePeriod);
+    constexpr int kStatusOverdue      = static_cast<int>(freqlab::licensing::Status::Overdue);
     constexpr int kStatusExpired      = static_cast<int>(freqlab::licensing::Status::Expired);
     constexpr int kStatusNotActivated = static_cast<int>(freqlab::licensing::Status::NotActivated);
     constexpr int kStatusTampered     = static_cast<int>(freqlab::licensing::Status::Tampered);
@@ -16,6 +17,7 @@ namespace
         if (status == kStatusLicensed)     return juce::Colour(0xFF44FF88);  // green
         if (status == kStatusTrial)        return juce::Colour(0xFF66CCFF);  // blue
         if (status == kStatusGracePeriod)  return juce::Colour(0xFFFFCC44);  // amber
+        if (status == kStatusOverdue)      return juce::Colour(0xFFFFCC44);  // amber (recoverable)
         if (status == kStatusExpired)      return juce::Colour(0xFFFF6655);  // red
         if (status == kStatusNotActivated) return juce::Colour(0xFFFFAA44);  // orange
         if (status == kStatusTampered)     return juce::Colour(0xFFBB55FF);  // purple
@@ -27,6 +29,7 @@ namespace
         if (status == kStatusLicensed)     return "Licensed";
         if (status == kStatusTrial)        return "Trial";
         if (status == kStatusGracePeriod)  return "Expiring soon";
+        if (status == kStatusOverdue)      return "License sync pending";
         if (status == kStatusExpired)      return "Expired";
         if (status == kStatusNotActivated) return "Not activated";
         if (status == kStatusTampered)     return "License invalid";
@@ -35,6 +38,8 @@ namespace
 
     juce::String modalLabelForStatus(int status) { return pillLabelForStatus(status).toUpperCase(); }
 
+    // Overdue is intentionally NOT in this list — the SDK's background
+    // check-in clears it without buyer action; a banner would just confuse.
     bool statusNeedsBanner(int status)
     {
         return status == kStatusNotActivated

@@ -43,6 +43,7 @@ inline IColor ColorForStatus(freqlab::licensing::Status s) {
         case S::Licensed:     return IColor(255,  68, 255, 136);  // green
         case S::Trial:        return IColor(255, 102, 204, 255);  // blue
         case S::GracePeriod:  return IColor(255, 255, 204,  68);  // amber
+        case S::Overdue:      return IColor(255, 255, 204,  68);  // amber (recoverable)
         case S::Expired:      return IColor(255, 255, 102,  85);  // red
         case S::NotActivated: return IColor(255, 255, 170,  68);  // orange
         case S::Tampered:     return IColor(255, 187,  85, 255);  // purple
@@ -57,6 +58,7 @@ inline const char* PillLabel(freqlab::licensing::Status s) {
         case S::Licensed:     return "Licensed";
         case S::Trial:        return "Trial";
         case S::GracePeriod:  return "Expiring soon";
+        case S::Overdue:      return "License sync pending";
         case S::Expired:      return "Expired";
         case S::NotActivated: return "Not activated";
         case S::Tampered:     return "License invalid";
@@ -71,6 +73,7 @@ inline const char* ModalLabel(freqlab::licensing::Status s) {
         case S::Licensed:     return "LICENSED";
         case S::Trial:        return "TRIAL";
         case S::GracePeriod:  return "EXPIRING SOON";
+        case S::Overdue:      return "LICENSE SYNC PENDING";
         case S::Expired:      return "EXPIRED";
         case S::NotActivated: return "NOT ACTIVATED";
         case S::Tampered:     return "LICENSE INVALID";
@@ -79,6 +82,8 @@ inline const char* ModalLabel(freqlab::licensing::Status s) {
     return "";
 }
 
+// Overdue is intentionally NOT in this list — the SDK's background
+// check-in clears it without buyer action.
 inline bool StatusNeedsBanner(freqlab::licensing::Status s) {
     using S = freqlab::licensing::Status;
     return s == S::Expired || s == S::NotActivated || s == S::Tampered;

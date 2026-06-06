@@ -32,13 +32,14 @@ target_compile_features(freqlab_licensing PUBLIC cxx_std_17)
 # hidden, matching unlicensed cloud builds.
 #
 # If multiple are ON, precedence: LICENSED > EXPIRED > TAMPERED > GRACE
-# > TRIAL > NOT_ACTIVATED.
+# > OVERDUE > TRIAL > NOT_ACTIVATED.
 option(FREQLAB_LICENSING_DEV_MODE          "Local dev: NotActivated (alias)" OFF)
 option(FREQLAB_LICENSING_DEV_NOT_ACTIVATED "Local dev: NotActivated"          OFF)
 option(FREQLAB_LICENSING_DEV_LICENSED      "Local dev: Licensed"              OFF)
 option(FREQLAB_LICENSING_DEV_EXPIRED       "Local dev: Expired"               OFF)
 option(FREQLAB_LICENSING_DEV_TAMPERED      "Local dev: Tampered"              OFF)
 option(FREQLAB_LICENSING_DEV_GRACE         "Local dev: GracePeriod"           OFF)
+option(FREQLAB_LICENSING_DEV_OVERDUE       "Local dev: Overdue"               OFF)
 option(FREQLAB_LICENSING_DEV_TRIAL         "Local dev: Trial"                 OFF)
 
 foreach(_flag IN ITEMS
@@ -48,6 +49,7 @@ foreach(_flag IN ITEMS
     FREQLAB_LICENSING_DEV_EXPIRED
     FREQLAB_LICENSING_DEV_TAMPERED
     FREQLAB_LICENSING_DEV_GRACE
+    FREQLAB_LICENSING_DEV_OVERDUE
     FREQLAB_LICENSING_DEV_TRIAL
 )
     if(${_flag})

@@ -29,7 +29,7 @@ namespace
         if (status == kStatusLicensed)     return "Licensed";
         if (status == kStatusTrial)        return "Trial";
         if (status == kStatusGracePeriod)  return "Expiring soon";
-        if (status == kStatusOverdue)      return "License sync pending";
+        if (status == kStatusOverdue)      return "Re-syncing";
         if (status == kStatusExpired)      return "Expired";
         if (status == kStatusNotActivated) return "Not activated";
         if (status == kStatusTampered)     return "License invalid";

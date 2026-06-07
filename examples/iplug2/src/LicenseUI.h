@@ -58,7 +58,7 @@ inline const char* PillLabel(freqlab::licensing::Status s) {
         case S::Licensed:     return "Licensed";
         case S::Trial:        return "Trial";
         case S::GracePeriod:  return "Expiring soon";
-        case S::Overdue:      return "License sync pending";
+        case S::Overdue:      return "Re-syncing";
         case S::Expired:      return "Expired";
         case S::NotActivated: return "Not activated";
         case S::Tampered:     return "License invalid";
@@ -73,7 +73,7 @@ inline const char* ModalLabel(freqlab::licensing::Status s) {
         case S::Licensed:     return "LICENSED";
         case S::Trial:        return "TRIAL";
         case S::GracePeriod:  return "EXPIRING SOON";
-        case S::Overdue:      return "LICENSE SYNC PENDING";
+        case S::Overdue:      return "RE-SYNCING";
         case S::Expired:      return "EXPIRED";
         case S::NotActivated: return "NOT ACTIVATED";
         case S::Tampered:     return "LICENSE INVALID";
@@ -244,10 +244,12 @@ public:
         } else {
             btnRow = inner.GetFromBottom(70.f).GetReducedFromBottom(30.f);
         }
+        // Overdue + Expired allow deactivate so the buyer can always free a machine slot.
         const bool canDeactivate = !mState->busy.load() && (
             status == freqlab::licensing::Status::Licensed ||
             status == freqlab::licensing::Status::Trial ||
             status == freqlab::licensing::Status::GracePeriod ||
+            status == freqlab::licensing::Status::Overdue ||
             status == freqlab::licensing::Status::Expired);
 
         if (isLicensed) {
@@ -310,6 +312,7 @@ public:
             status == freqlab::licensing::Status::Licensed ||
             status == freqlab::licensing::Status::Trial ||
             status == freqlab::licensing::Status::GracePeriod ||
+            status == freqlab::licensing::Status::Overdue ||
             status == freqlab::licensing::Status::Expired;
         if (mDeactivateRect.Contains(x, y) && !mState->busy.load() && canDeactivate) {
             DoDeactivate();

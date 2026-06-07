@@ -1,0 +1,133 @@
+name: Release SDK Tag
+
+# Manual-only. Run from the Actions tab when ready to cut a release.
+# Workflow does NOT auto-fire on push — every release is a deliberate click.
+#
+# Security note: workflow inputs are passed via `env:` blocks so shell
+# substitution happens on quoted vars, not raw interpolation. Direct
+# `${{ inputs.* }}` in `run:` would allow shell injection even though
+# only repo writers can trigger workflow_dispatch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver version (e.g., 0.2.0). Tag will be sdk-vX.Y.Z.'
+        required: true
+        type: string
+      dry_run:
+        description: 'Validate + build + test, but do not push tag.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history so tag-existence check is accurate
+
+      - name: Validate semver input
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid semver: $VERSION"
+            exit 1
+          fi
+
+      - name: Verify tag does not already exist
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git rev-parse "sdk-v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag sdk-v$VERSION already exists. Tags are immutable — pick a new version."
+            exit 1
+          fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo build
+        run: cargo build --all-targets --all-features --verbose
+
+      - name: cargo test
+        run: cargo test --all-features --verbose
+
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps
+
+      - name: CMake configure + build (C++ stub)
+        run: |
+          cmake -S . -B build-release-check
+          cmake --build build-release-check
+
+      - name: Bump Cargo.toml version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          # sed pattern only replaces the value, never the key — pattern-anchored
+          # to ^version = so other version fields elsewhere are untouched.
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          echo "Cargo.toml now:"
+          grep "^version" Cargo.toml
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit + tag + push
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git diff --quiet Cargo.toml; then
+            echo "Cargo.toml already at $VERSION; tagging existing HEAD."
+          else
+            git add Cargo.toml
+            git commit -m "release: sdk-v$VERSION"
+            git push origin main
+          fi
+          git tag -a "sdk-v$VERSION" -m "Release sdk-v$VERSION"
+          git push origin "sdk-v$VERSION"
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sdk-v${{ inputs.version }}
+          name: sdk-v${{ inputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "DRY RUN: all pre-release validation passed."
+          echo "Would have:"
+          echo "  - bumped Cargo.toml version to $VERSION"
+          echo "  - committed and pushed to main"
+          echo "  - created annotated tag sdk-v$VERSION"
+          echo "  - published a GitHub Release with auto-generated notes"
+          echo "Re-run with dry_run unchecked to actually release."
